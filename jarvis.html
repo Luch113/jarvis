@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jarvis — Looch's AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --blue: #00c8ff;
+    --blue-dim: #00c8ff44;
+    --blue-glow: #00c8ff88;
+    --bg: #000d1a;
+    --bg2: #001828;
+    --green: #00ff9d;
+    --gold: #ffaa00;
+    --text: #7df9ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #000508; overflow: hidden; }
+
+  /* Animated starfield background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, #001830 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, #000d1a 0%, transparent 50%),
+      #000508;
+  }
+
+  /* HUD corner decorations */
+  .corner { position: fixed; width: 60px; height: 60px; z-index: 1; }
+  .corner.tl { top: 12px; left: 12px; border-top: 1px solid var(--blue-dim); border-left: 1px solid var(--blue-dim); }
+  .corner.tr { top: 12px; right: 12px; border-top: 1px solid var(--blue-dim); border-right: 1px solid var(--blue-dim); }
+  .corner.bl { bottom: 12px; left: 12px; border-bottom: 1px solid var(--blue-dim); border-left: 1px solid var(--blue-dim); }
+  .corner.br { bottom: 12px; right: 12px; border-bottom: 1px solid var(--blue-dim); border-right: 1px solid var(--blue-dim); }
+
+  /* Scan line */
+  .scan-line {
+    position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 2;
+    background: linear-gradient(90deg, transparent, var(--blue-dim), transparent);
+    animation: scanline 5s linear infinite;
+  }
+  @keyframes scanline { 0%{top:0} 100%{top:100vh} }
+
+  /* Main layout */
+  #app {
+    position: relative; z-index: 5;
+    display: flex; flex-direction: column; align-items: center;
+    height: 100vh; padding: 20px;
+  }
+
+  /* Header */
+  header {
+    width: 100%; max-width: 700px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--blue-dim);
+    flex-shrink: 0;
+  }
+  .title-block { display: flex; flex-direction: column; }
+  .title { font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900; color: var(--blue); letter-spacing: 6px; text-shadow: 0 0 20px var(--blue-glow); }
+  .subtitle { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--blue-dim); letter-spacing: 3px; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg2); border: 1px solid var(--blue-dim);
+    padding: 4px 10px; border-radius: 20px;
+    font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--blue-dim);
+    letter-spacing: 2px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  #clock { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--blue); opacity: 0.6; }
+
+  /* Arc reactor */
+  .reactor-section {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px 0 8px; flex-shrink: 0;
+  }
+  .arc-outer {
+    width: 100px; height: 100px; border-radius: 50%;
+    border: 1px solid var(--blue-dim);
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .arc-outer::before {
+    content: ''; position: absolute; inset: 5px; border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--blue);
+    animation: spin 4s linear infinite;
+  }
+  .arc-outer::after {
+    content: ''; position: absolute; inset: 12px; border-radius: 50%;
+    border: 1px solid transparent;
+    border-bottom-color: var(--blue-dim);
+    animation: spin 2.5s linear infinite reverse;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .arc-inner {
+    width: 40px; height: 40px; border-radius: 50%; z-index: 2;
+    background: radial-gradient(circle, var(--blue) 0%, #005580 50%, transparent 100%);
+    box-shadow: 0 0 14px var(--blue), inset 0 0 10px var(--blue-glow);
+    transition: all 0.3s;
+  }
+  .arc-inner.talking {
+    box-shadow: 0 0 30px var(--blue), 0 0 60px var(--blue-glow), inset 0 0 14px #fff;
+    animation: glow-pulse 0.25s infinite alternate;
+  }
+  .arc-inner.thinking {
+    background: radial-gradient(circle, var(--gold) 0%, #664400 50%, transparent 100%);
+    box-shadow: 0 0 20px var(--gold), inset 0 0 10px #ffcc44;
+    animation: think-pulse 0.6s infinite alternate;
+  }
+  @keyframes glow-pulse { to { box-shadow: 0 0 40px var(--blue), 0 0 80px #00c8ff33, inset 0 0 18px #fff; } }
+  @keyframes think-pulse { to { box-shadow: 0 0 28px var(--gold), inset 0 0 14px #ffdd66; } }
+
+  .waveform {
+    display: flex; align-items: center; gap: 3px; height: 22px; margin-top: 8px;
+  }
+  .bar { width: 3px; background: #00c8ff22; border-radius: 2px; height: 3px; transition: height 0.08s; }
+  .bar.active { background: var(--blue); }
+
+  /* Chat */
+  .chat-wrap {
+    width: 100%; max-width: 700px; flex: 1;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: #00000033; border: 1px solid var(--blue-dim);
+    border-radius: 8px; margin: 8px 0;
+  }
+  .chat-label {
+    padding: 6px 14px; border-bottom: 1px solid var(--blue-dim);
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    color: var(--blue-dim); letter-spacing: 2px; flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #chat-area {
+    flex: 1; overflow-y: auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    scrollbar-width: thin; scrollbar-color: var(--blue-dim) transparent;
+  }
+  #chat-area::-webkit-scrollbar { width: 4px; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--blue-dim); border-radius: 2px; }
+
+  .msg { max-width: 82%; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+  .msg-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 2px; margin-bottom: 4px; }
+  .msg-body { padding: 10px 14px; border-radius: 8px; font-family: 'Share Tech Mono', monospace; font-size: 13px; line-height: 1.6; }
+  .msg.jarvis { align-self: flex-start; }
+  .msg.jarvis .msg-label { color: var(--blue-dim); }
+  .msg.jarvis .msg-body { background: #00c8ff0d; border: 1px solid #00c8ff22; color: var(--text); border-bottom-left-radius: 2px; }
+  .msg.user { align-self: flex-end; }
+  .msg.user .msg-label { color: #ffffff33; text-align: right; }
+  .msg.user .msg-body { background: #ffffff08; border: 1px solid #ffffff15; color: #ffffffcc; border-bottom-right-radius: 2px; }
+  .msg.thinking .msg-body { background: transparent; border: none; color: var(--gold); font-size: 12px; animation: blink 0.7s infinite alternate; padding: 6px 0; }
+  @keyframes blink { to { opacity: 0.2; } }
+
+  /* Input */
+  .input-section { width: 100%; max-width: 700px; flex-shrink: 0; }
+  #status-line { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--blue-dim); letter-spacing: 2px; padding: 2px 0 4px; min-height: 18px; }
+  .input-row { display: flex; gap: 8px; }
+  #user-input {
+    flex: 1; background: var(--bg2); border: 1px solid var(--blue-dim);
+    border-radius: 6px; color: var(--blue); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; padding: 10px 14px; outline: none; transition: border-color 0.2s;
+  }
+  #user-input::placeholder { color: #00c8ff22; }
+  #user-input:focus { border-color: var(--blue-glow); box-shadow: 0 0 8px var(--blue-dim); }
+  .btn {
+    background: transparent; border: 1px solid var(--blue-dim);
+    color: var(--blue); font-family: 'Orbitron', monospace; font-size: 10px;
+    letter-spacing: 1px; padding: 10px 16px; border-radius: 6px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .btn:hover { background: #00c8ff11; border-color: var(--blue); box-shadow: 0 0 10px var(--blue-dim); }
+  .btn.primary { border-color: var(--blue); background: #00c8ff15; }
+  .btn.mic-active { border-color: #ff4444; color: #ff6666; background: #ff000015; animation: mic-glow 1s infinite alternate; }
+  @keyframes mic-glow { to { box-shadow: 0 0 16px #ff000066; } }
+
+  /* Footer */
+  footer {
+    width: 100%; max-width: 700px; flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 8px; border-top: 1px solid var(--blue-dim);
+    font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--blue-dim); letter-spacing: 2px;
+  }
+
+  /* Particles */
+  .particle {
+    position: fixed; border-radius: 50%; pointer-events: none; z-index: 1;
+    background: var(--blue); opacity: 0;
+    animation: float-up linear infinite;
+  }
+  @keyframes float-up {
+    0% { opacity: 0; transform: translateY(0) scale(1); }
+    10% { opacity: 0.4; }
+    90% { opacity: 0.1; }
+    100% { opacity: 0; transform: translateY(-100vh) scale(0.3); }
+  }
+</style>
+</head>
+<body>
+
+<div class="scan-line"></div>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<div id="app">
+  <header>
+    <div class="title-block">
+      <div class="title">JARVIS</div>
+      <div class="subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill"><div class="dot"></div>ONLINE</div>
+      <div id="clock">00:00:00</div>
+    </div>
+  </header>
+
+  <div class="reactor-section">
+    <div class="arc-outer">
+      <div class="arc-inner" id="arc-core"></div>
+    </div>
+    <div class="waveform" id="waveform">
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+  </div>
+
+  <div class="chat-wrap">
+    <div class="chat-label">
+      <span>// COMM CHANNEL — LOOCH</span>
+      <span id="msg-count">0 MESSAGES</span>
+    </div>
+    <div id="chat-area"></div>
+  </div>
+
+  <div class="input-section">
+    <div id="status-line"></div>
+    <div class="input-row">
+      <input id="user-input" type="text" placeholder="Speak or type your command..." autocomplete="off"/>
+      <button class="btn" id="mic-btn" onclick="toggleMic()">🎤 MIC</button>
+      <button class="btn primary" onclick="sendMessage()">SEND</button>
+    </div>
+  </div>
+
+  <footer>
+    <span>STARK INDUSTRIES — LOOCH UNIT</span>
+    <span id="footer-clock">--:--:--</span>
+    <span>v10.0 — AI CORE ACTIVE</span>
+  </footer>
+</div>
+
+<script>
+const USER_NAME = "Looch";
+const synth = window.speechSynthesis;
+let voices = [], bestVoice = null;
+let waveInterval = null, isListening = false, isSpeaking = false;
+let recognition = null;
+let conversationHistory = [];
+let msgCount = 0;
+
+const bars = document.querySelectorAll('.bar');
+const arcCore = document.getElementById('arc-core');
+const chatArea = document.getElementById('chat-area');
+const statusLine = document.getElementById('status-line');
+const micBtn = document.getElementById('mic-btn');
+
+// Clock
+function updateClock() {
+  const t = new Date().toLocaleTimeString('en-US', {hour12: false});
+  document.getElementById('clock').textContent = t;
+  document.getElementById('footer-clock').textContent = t;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// Particles
+function spawnParticles() {
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 2 + 1;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${Math.random()*100}vw;
+      bottom:${Math.random()*20}px;
+      animation-duration:${8+Math.random()*12}s;
+      animation-delay:${Math.random()*10}s;
+    `;
+    document.body.appendChild(p);
+  }
+}
+spawnParticles();
+
+// Voices
+function loadVoices() {
+  voices = synth.getVoices();
+  if (!voices.length) return;
+  const preferred = ['Daniel', 'Google UK English Male', 'Microsoft David', 'Arthur', 'Alex'];
+  for (const p of preferred) {
+    const v = voices.find(v => v.name.includes(p));
+    if (v) { bestVoice = v; break; }
+  }
+  if (!bestVoice) bestVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+}
+if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+loadVoices(); setTimeout(loadVoices, 600);
+
+// Wave
+function animateWave(active) {
+  clearInterval(waveInterval);
+  if (!active) { bars.forEach(b => { b.style.height = '3px'; b.classList.remove('active'); }); return; }
+  waveInterval = setInterval(() => {
+    bars.forEach(b => {
+      b.style.height = (Math.random() * 18 + 3) + 'px';
+      b.classList.toggle('active', Math.random() > 0.3);
+    });
+  }, 80);
+}
+
+function setArc(state) {
+  arcCore.classList.remove('talking', 'thinking');
+  if (state) arcCore.classList.add(state);
+}
+
+// Chat messages
+function addMsg(role, text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = role === 'jarvis' ? '// JARVIS' : '// ' + USER_NAME.toUpperCase();
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = text;
+  wrap.appendChild(label);
+  wrap.appendChild(body);
+  chatArea.appendChild(wrap);
+  chatArea.scrollTop = chatArea.scrollHeight;
+  if (role !== 'thinking') {
+    msgCount++;
+    document.getElementById('msg-count').textContent = msgCount + ' MESSAGE' + (msgCount !== 1 ? 'S' : '');
+  }
+  return wrap;
+}
+
+function addThinking() {
+  const w = document.createElement('div');
+  w.className = 'msg thinking'; w.id = 'think-msg';
+  const b = document.createElement('div'); b.className = 'msg-body';
+  b.textContent = 'Processing your request...';
+  w.appendChild(b); chatArea.appendChild(w);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+function removeThinking() { const t = document.getElementById('think-msg'); if (t) t.remove(); }
+
+// Speak
+function speakText(text) {
+  synth.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  if (bestVoice) utt.voice = bestVoice;
+  utt.rate = 0.87; utt.pitch = 0.8; utt.volume = 1;
+  utt.onstart = () => { setArc('talking'); animateWave(true); isSpeaking = true; };
+  utt.onend = () => { setArc(null); animateWave(false); isSpeaking = false; };
+  utt.onerror = () => { setArc(null); animateWave(false); isSpeaking = false; };
+  synth.speak(utt);
+}
+
+// Claude API
+async function callClaude(userMessage) {
+  const system = `You are Jarvis, the AI assistant from Iron Man — calm, intelligent, slightly witty, with a refined British manner. You are speaking directly to ${USER_NAME} (pronounced "Looch", rhymes with "couch" but with an L). 
+
+Rules:
+- Always address the user as "${USER_NAME}" — never "sir" alone, you may say "Looch" or mix "Looch" naturally
+- Keep responses concise: 1 to 3 sentences unless the user needs detail
+- Never say "J.A.R.V.I.S." — you are simply "Jarvis"
+- Speak in plain conversational text — no markdown, no bullet points, no asterisks
+- You can help with anything: school, sports, life questions, tech, general knowledge
+- Occasionally show personality — dry wit, subtle confidence — but never overdo it`;
+
+  conversationHistory.push({ role: "user", content: userMessage });
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      system,
+      messages: conversationHistory
+    })
+  });
+  const data = await res.json();
+  const reply = data.content?.[0]?.text || `I'm having a moment of difficulty, ${USER_NAME}. Please try again.`;
+  conversationHistory.push({ role: "assistant", content: reply });
+  if (conversationHistory.length > 24) conversationHistory = conversationHistory.slice(-24);
+  return reply;
+}
+
+// Send
+async function sendMessage() {
+  const input = document.getElementById('user-input');
+  const text = input.value.trim();
+  if (!text || isSpeaking) return;
+  input.value = '';
+  addMsg('user', text);
+  addThinking();
+  setArc('thinking');
+  statusLine.textContent = '// PROCESSING QUERY...';
+  try {
+    const reply = await callClaude(text);
+    removeThinking();
+    addMsg('jarvis', reply);
+    statusLine.textContent = '';
+    speakText(reply);
+  } catch (e) {
+    removeThinking();
+    const err = `I'm experiencing a connectivity issue, ${USER_NAME}. Please check your internet connection.`;
+    addMsg('jarvis', err);
+    statusLine.textContent = '// CONNECTION ERROR';
+    speakText(err);
+  }
+}
+
+// Mic
+function toggleMic() {
+  if (isListening) { stopMic(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { statusLine.textContent = '// MIC NOT SUPPORTED — USE CHROME'; return; }
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.textContent = '🔴 STOP';
+    micBtn.classList.add('mic-active');
+    statusLine.textContent = '// LISTENING — SPEAK NOW, ' + USER_NAME.toUpperCase() + '...';
+    animateWave(true);
+  };
+  recognition.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('user-input').value = final || interim;
+    if (final) { stopMic(); setTimeout(() => sendMessage(), 300); }
+  };
+  recognition.onerror = (e) => { statusLine.textContent = '// MIC ERROR: ' + e.error.toUpperCase(); stopMic(); };
+  recognition.onend = () => { if (isListening) stopMic(); };
+  recognition.start();
+}
+
+function stopMic() {
+  isListening = false;
+  micBtn.textContent = '🎤 MIC';
+  micBtn.classList.remove('mic-active');
+  animateWave(false);
+  statusLine.textContent = '';
+  if (recognition) try { recognition.stop(); } catch(e) {}
+}
+
+document.getElementById('user-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// Greeting
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const h = new Date().getHours();
+    const t = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+    const greeting = `Good ${t}, Looch. All systems are online and fully operational. What do you need?`;
+    addMsg('jarvis', greeting);
+    speakText(greeting);
+  }, 800);
+});
+</script>
+</body>
+</html>
